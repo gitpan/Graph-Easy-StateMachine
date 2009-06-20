@@ -1,12 +1,10 @@
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl Graph-Easy-StateMachine.t'
-
 #########################
 
-# change 'tests => 1' to 'tests => last_test_to_print';
-
+package BibbityBoo;
 use Test::More;
-BEGIN { plan tests => 10 };
+BEGIN { plan tests => 12 };
 use Graph::Easy;
 use Graph::Easy::StateMachine;
 ok(1); # If we made it this far, we're ok.
@@ -43,10 +41,22 @@ FSA
   my $w = bless {};
 
   ok($w->START);
-  is('main::B', ref ($w->goA->goB), "chaining");
+  is('BibbityBoo::B', ref ($w->goA->goB), "chaining");
   eval { $w->START };
   ok ( $@ =~ m/invalid state transition B->START/ );
 
+package BibbityBobbityBoo;
+BEGIN { @ISA = qw/BibbityBoo/ }
+
+use Graph::Easy::StateMachine ' [B] -> [C] ';
+
+my $q = bless [];
+
+package BibbityBoo;
+
+is('BibbityBobbityBoo::C', ref ($q->START->goB->C), "inheritance");
+eval { $w->C };
+ok ($@);
 
 
 

@@ -4,7 +4,43 @@ use 5.006002;
 use strict;
 use warnings;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
+# use Class::ISA;
+#--------------------------------------------------------------------------
+sub self_and_super_path {
+  # Assumption: searching is depth-first.
+  # Assumption: '' (empty string) can't be a class package name.
+  # Note: 'UNIVERSAL' is not given any special treatment.
+  return () unless @_;
+
+  my @out = ();
+
+  my @in_stack = ($_[0]);
+  my %seen = ($_[0] => 1);
+
+  my $current;
+  while(@in_stack) {
+    next unless defined($current = shift @in_stack) && length($current);
+    push @out, $current;
+    no strict 'refs';
+    unshift @in_stack,
+      map
+        { my $c = $_; # copy, to avoid being destructive
+          substr($c,0,2) = "main::" if substr($c,0,2) eq '::';
+           # Canonize the :: -> main::, ::foo -> main::foo thing.
+           # Should I ever canonize the Foo'Bar = Foo::Bar thing? 
+          $seen{$c}++ ? () : $c;
+        }
+        @{"$current\::ISA"}
+    ;
+    # I.e., if this class has any parents (at least, ones I've never seen
+    # before), push them, in order, onto the stack of classes I need to
+    # explore.
+  }
+
+  return @out;
+}
+# end routine taken from Class::ISA version 0.33
 
 our $base;
 sub template($$$){
@@ -68,13 +104,21 @@ sub Graph::Easy::as_FSA {
    join "\n", @LOC, '1;';
 }
 
+our %GraphsByPackage;
 sub import {
    shift; # lose package
-   my $caller = caller;
-   for (@_){
+   my ($caller, $file, $line) = caller;
+   no strict 'refs';
+   push @{$GraphsByPackage{$caller}}, @_;
+   no warnings;
+   my @graphs = map {
+      @{$GraphsByPackage{$_}}
+   } reverse (self_and_super_path($caller), 'UNIVERSAL');
+
+   eval join "\n", ( map { 
       my $g = Graph::Easy->new( $_ );
-      eval $g->as_FSA(base => $caller) or die "FSA parse failure: $@"
-   }; 
+      $g->as_FSA(base => $caller)
+   } @graphs),';1' or die "FSA parse failure from $file line $line:\n$@"; 
 };
 
 1;
@@ -88,7 +132,7 @@ Graph::Easy::StateMachine - create a FSA framework from a Graph::Easy graph
 
 Create state machine classes, also known as a FSA or a DFSA,
 from a state machine description in Graph::Easy's graph description
-language.
+language. States are available in derived classes that use it too.
 
   use Graph::Easy::StateMachine;
   my $graph = Graph::Easy->new( <<FSA );
@@ -160,9 +204,31 @@ your own convention for using them.  Something like
      $_->${ $_->run ? \'HappyPath' : \'Problem' }()
    }
 
+=head1 INHERITING FROM A STATELY CLASS
+
+When a base class of other derived classes has state machine classes
+and methods
+associated with it via this tool invoked by presenting the graphs on
+the C<use> line (yes, graphs. Transitions described in later graphs will
+clobber transitions in earlier graphs.) derived classes may bring in
+the state machines from their parent classes like so
+
+   package MyDerivedStatelyClass;
+   use base MyParentStatelyClass;
+   use Graph::Easy::StateMachine;
+
+When the derived class has some variation in its state machine,
+the variation is all that needs to be enumerated.
+
+This works by reevaluating all the graphs from the superclasses 
+with regard to the the current package.  No facility is made for
+state transitions between BASE classes.
+
 =head1 PARAMETERS TO THE as_FSA METHOD
 
 C<as_FSA> takes named parameters that control the produced source code.
+
+Altering these is not supported when specifying graphs on the C<use> line.
 
 =head2 base
 
@@ -208,7 +274,6 @@ C<getwand> and C<BeDrella> are entry methods.
 
 writes the C<as_FSA> method into L<Graph::Easy>'s name space.
 
-
 =head1 HISTORY
 
 =over 8
@@ -224,6 +289,10 @@ switched from C<enter_X> to the simpler C<X> for the default transition method n
 =item 0.03
 
 added invalid method error-throwers
+
+=item 0.4 
+
+inheritance
 
 =back
 
