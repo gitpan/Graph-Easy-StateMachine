@@ -2,12 +2,33 @@
 # `make test'. After `make install' it should work as `perl Graph-Easy-StateMachine.t'
 #########################
 
-package BibbityBoo;
 use Test::More;
 BEGIN { plan tests => 12 };
+
+{
+    package SyntaxError;
+    use Test::More;
+    if (eval <<\BLAH)
+use Graph::Easy::StateMachine <<ARF;
+[BASE] - arf -> [B]
+[B] - arf -> [C]
+[B] - arf -> [D]
+ARF
+1;
+BLAH
+    {
+        fail('ambiguous edge is syntax error');
+    }else{
+        my $E;
+        $E = $@;
+        like($E,qr/ambiguous/,'ambiguous edge is syntax error');
+    }
+}
+
+package BibbityBoo;
+use Test::More;
 use Graph::Easy;
 use Graph::Easy::StateMachine;
-ok(1); # If we made it this far, we're ok.
 
   my $graph = Graph::Easy->new( <<FSA );
       [ START ] => [ disconnected ]
@@ -23,7 +44,6 @@ ok(1); # If we made it this far, we're ok.
       -- whoops --> [FAIL]
 FSA
   my $code = $graph->as_FSA( base => 'bibbity');
-#   warn $code;
   ok(eval  $code);
   my $boo = bless [], 'bibbity::START';
   ok($boo->disconnected);
@@ -57,7 +77,6 @@ package BibbityBoo;
 is('BibbityBobbityBoo::C', ref ($q->START->goB->C), "inheritance");
 eval { $w->C };
 ok ($@);
-
 
 
 

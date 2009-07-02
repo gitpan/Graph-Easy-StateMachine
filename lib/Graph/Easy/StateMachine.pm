@@ -3,8 +3,9 @@ package Graph::Easy::StateMachine;
 use 5.006002;
 use strict;
 use warnings;
+use Carp;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 # use Class::ISA;
 #--------------------------------------------------------------------------
 sub self_and_super_path {
@@ -70,19 +71,22 @@ sub Graph::Easy::as_FSA {
          my $from = $statename;
          my $to = $edge->to->name;
          my $frompack;
+         my $methodname = $edge->name ||  $to;
          if( $from eq $BASE )
          {
             $frompack = $base;
-            $BaseTransitions{ $edge->name ||  $to } = 1;
+            $BaseTransitions{ $methodname } = 1;
          }else{
             $frompack = "$base\::$from";
          };
          my $topack = ( $to eq $BASE ? $base : "$base\::$to" );
-         $Transitions{ $edge->name ||  $to }->{$from} = 1;
+         $Transitions{ $methodname }->{$from}++ and Carp::croak "ambiguous declaration of $methodname from $from";
+
          push @LOC, template $frompack, $topack, $edge->name ||  $to;
          if ($edge->bidirectional)
          {
-            $Transitions{ $edge->name ||  $from }->{$to} = 1;
+            $Transitions{ $edge->name ||  $from }->{$to}++
+               and Carp::croak "ambiguous declaration of $methodname from $from";
             push @LOC, template $topack, $frompack, $edge->name || $from;
             $to eq $BASE and 
                $BaseTransitions{ $edge->name ||  $from } = 1;
@@ -193,6 +197,15 @@ package, while the C<SelectableURLfetcher::inprogress::goodconnect> method reble
 an C<inprogress> object into the C<connected> state.  That is, states are represented
 by packages, and transitioning occurs by reblessing the object.
 
+=head1 SYNTAX CHECKING
+
+Graphs presented to C<as_FSA> must have uniquely named edges.
+
+   [A] - next -> [B]
+   [A] - next -> [C]
+
+is a syntax error and will croak.
+
 =head1 ALL THIS MODULE DOES
 
 single inheritance from the base class and transition methods
@@ -293,6 +306,10 @@ added invalid method error-throwers
 =item 0.4 
 
 inheritance
+
+=item 0.5
+
+syntax check for ambiguous edges
 
 =back
 
