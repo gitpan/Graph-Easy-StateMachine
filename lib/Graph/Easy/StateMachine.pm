@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 # use Class::ISA;
 #--------------------------------------------------------------------------
 sub self_and_super_path {
@@ -103,7 +103,14 @@ sub Graph::Easy::as_FSA {
           $Transitions{ $method }->{$statename} and next;
           push @LOC,
             "sub $base\::$statename\::$method { my (\$p,\$f,\$l) = caller; die qq{invalid state transition $statename\->$method at \$f line \$l\n} }"
-      }
+      };
+      # inherit methods from parent states
+      push @LOC, "push \@$base\::$statename\::ISA, qw(";
+      no strict 'refs';
+      push @LOC, join " ", map {"$_\::$statename"} grep {
+          scalar %{"$_\::$statename\::"}
+      } self_and_super_path($base);
+      push @LOC, ");";
    }; 
    join "\n", @LOC, '1;';
 }
@@ -136,7 +143,8 @@ Graph::Easy::StateMachine - create a FSA framework from a Graph::Easy graph
 
 Create state machine classes, also known as a FSA or a DFSA,
 from a state machine description in Graph::Easy's graph description
-language. States are available in derived classes that use it too.
+language. States, and their methods, are available
+in derived classes that use it too.
 
   use Graph::Easy::StateMachine;
   my $graph = Graph::Easy->new( <<FSA );
@@ -158,7 +166,7 @@ language. States are available in derived classes that use it too.
 
 Alternately, use the C<import> method to eval the FSA for you.
 
-  paclage SelectableURLfetcher;
+  package SelectableURLfetcher;
   use Graph::Easy::StateMachine <<FSA;
       [ BASE ] = EnterStateMachine =>
       [ START ] => [ disconnected ]
@@ -217,6 +225,9 @@ your own convention for using them.  Something like
      $_->${ $_->run ? \'HappyPath' : \'Problem' }()
    }
 
+As of version 0.06, state namespaces now inherit from the
+equivalent namespace in all parent classes.
+
 =head1 INHERITING FROM A STATELY CLASS
 
 When a base class of other derived classes has state machine classes
@@ -231,7 +242,16 @@ the state machines from their parent classes like so
    use Graph::Easy::StateMachine;
 
 When the derived class has some variation in its state machine,
-the variation is all that needs to be enumerated.
+the variation is all that needs to be enumerated. When a parent
+class has a state class, such as ExampleParent::UNVERIFIED, and
+a child class uses this module, the resulting ExampleChild::UNVERIFIED
+package will list ExampleParent::UNVERIFIED in its C<@ISA> list,
+so a method such as
+
+  sub ExampleParent::UNVERIFIED::isVerified{0}
+
+will be available to objects in the C<ExampleChild::UNVERIFIED>
+state class.
 
 This works by reevaluating all the graphs from the superclasses 
 with regard to the the current package.  No facility is made for
@@ -310,6 +330,10 @@ inheritance
 =item 0.5
 
 syntax check for ambiguous edges
+
+=item 0.6
+
+added inheritance from existing state classes in parents
 
 =back
 

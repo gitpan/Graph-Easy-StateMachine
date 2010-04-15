@@ -3,7 +3,7 @@
 #########################
 
 use Test::More;
-BEGIN { plan tests => 12 };
+BEGIN { plan tests => 13 };
 
 {
     package SyntaxError;
@@ -65,16 +65,18 @@ FSA
   eval { $w->START };
   ok ( $@ =~ m/invalid state transition B->START/ );
 
+  sub BibbityBoo::B::Drink { 'coffee' }
 package BibbityBobbityBoo;
 BEGIN { @ISA = qw/BibbityBoo/ }
 
 use Graph::Easy::StateMachine ' [B] -> [C] ';
 
 my $q = bless [];
+$q->START->goB;
+package BibbityBoo; # get back where we have Test::More imported
+is('coffee', $q->Drink, "inherited state methods");
 
-package BibbityBoo;
-
-is('BibbityBobbityBoo::C', ref ($q->START->goB->C), "inheritance");
+is('BibbityBobbityBoo::C', ref ($q->C), "inheritance");
 eval { $w->C };
 ok ($@);
 
