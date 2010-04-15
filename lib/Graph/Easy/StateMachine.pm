@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 # use Class::ISA;
 #--------------------------------------------------------------------------
 sub self_and_super_path {
@@ -105,12 +105,30 @@ sub Graph::Easy::as_FSA {
             "sub $base\::$statename\::$method { my (\$p,\$f,\$l) = caller; die qq{invalid state transition $statename\->$method at \$f line \$l\n} }"
       };
       # inherit methods from parent states
-      push @LOC, "push \@$base\::$statename\::ISA, qw(";
+      my %Seen = ();
       no strict 'refs';
-      push @LOC, join " ", map {"$_\::$statename"} grep {
+      my @MoreIsas;
+      @MoreIsas = map {"$_\::$statename"} grep {
+          ! $Seen{$_}++ and
           scalar %{"$_\::$statename\::"}
-      } self_and_super_path($base);
-      push @LOC, ");";
+      } do {
+        my @IsaList = @{"$base\::ISA"};
+	my %seen; my $sawnew;
+	while(1){
+	  my @copy = @IsaList;
+	  $sawnew = 0;
+	  for (@copy){
+             $seen{$_}++ and next;
+	     push @IsaList, @{"$_\::ISA"};
+	     $sawnew++;
+	  };
+          $sawnew or last;
+	};
+             
+        @IsaList;
+      };
+      # warn "adding to \@$base\::$statename\::ISA these: @MoreIsas";
+      @MoreIsas and  push @{"$base\::$statename\::ISA"},@MoreIsas;
    }; 
    join "\n", @LOC, '1;';
 }
